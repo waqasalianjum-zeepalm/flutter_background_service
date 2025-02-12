@@ -1,28 +1,34 @@
 package id.flutter.flutter_background_service;
 
 import android.app.ActivityManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.os.Handler;
+import android.os.IBinder;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.embedding.engine.plugins.service.ServiceAware;
+import io.flutter.embedding.engine.plugins.service.ServicePluginBinding;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.JSONMethodCodec;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
+import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /**
  * FlutterBackgroundServicePlugin
@@ -51,7 +57,6 @@ public class FlutterBackgroundServicePlugin implements FlutterPlugin, MethodCall
         }
     };
 
-
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
         this.context = flutterPluginBinding.getApplicationContext();
@@ -69,14 +74,25 @@ public class FlutterBackgroundServicePlugin implements FlutterPlugin, MethodCall
     }
 
     private void start() {
-        WatchdogReceiver.enqueue(context);
-        boolean isForeground = config.isForeground();
-        Intent intent = new Intent(context, BackgroundService.class);
+        try {
+            WatchdogReceiver.enqueue(context);
+            boolean isForeground = config.isForeground();
+            Intent intent = new Intent(context, BackgroundService.class);
 
-        if (isForeground) {
-            ContextCompat.startForegroundService(context, intent);
-        } else {
-            context.startService(intent);
+            if (isForeground) {
+                try {
+                    ContextCompat.startForegroundService(context, intent);
+                } catch (SecurityException e) {
+                    // Fallback to normal service if foreground permission is denied
+                    Log.w(TAG, "Failed to start foreground service: " + e.getMessage());
+                    context.startService(intent);
+                }
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error starting service: " + e.getMessage());
+            // Handle or rethrow as needed
         }
     }
 
